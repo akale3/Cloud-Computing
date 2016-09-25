@@ -1,0 +1,81 @@
+<project name="CloudKon" default="main" basedir=".">
+	<property name="projectName" value="CloudKon" />
+	<property name="src.dir" location="src" />
+	<property name="build.dir" location="bin" />
+	<property name="dist.dir" location="dist" />
+	<property name="output.dir" location="output" />
+
+	<target name="init">
+		<delete dir="${build-dir}" />
+		<delete dir="${output.dir}" />
+		<mkdir dir="${build.dir}" />
+	</target>
+
+	<target name="compile" depends="init" description="Compiling the source file">
+		<javac includeantruntime="false" srcdir="${src.dir}" destdir="${build.dir}" />
+	</target>
+
+
+	<target name="compileCloudKon" depends="init">
+		<mkdir dir="build/classes" />
+		<javac srcdir="src" destdir="build/classes">
+			<classpath>
+				<pathelement path="lib/aspectjrt-1.8.2.jar" />
+				<pathelement path="lib/aspectjweaver.jar" />
+				<pathelement path="lib/aws-java-sdk-1.10.73.jar" />
+				<pathelement path="lib/aws-java-sdk-1.10.73-javadoc.jar" />
+				<pathelement path="lib/aws-java-sdk-1.10.73-sources.jar" />
+				<pathelement path="lib/aws-java-sdk-flow-build-tools-1.10.73.jar" />
+				<pathelement path="lib/commons-codec-1.6.jar" />
+				<pathelement path="lib/commons-logging-1.1.3.jar" />
+				<pathelement path="lib/freemarker-2.3.9.jar" />
+				<pathelement path="lib/httpclient-4.3.6.jar" />
+				<pathelement path="lib/httpcore-4.3.3.jar" />
+				<pathelement path="lib/jackson-annotations-2.5.0.jar" />
+				<pathelement path="lib/jackson-core-2.5.3.jar" />
+				<pathelement path="lib/jackson-databind-2.5.3.jar" />
+				<pathelement path="lib/jackson-dataformat-cbor-2.5.3.jar" />
+				<pathelement path="lib/javax.mail-api-1.4.6.jar" />
+				<pathelement path="lib/joda-time-2.8.1.jar" />
+				<pathelement path="lib/spring-beans-3.0.7.RELEASE.jar" />
+				<pathelement path="lib/spring-context-3.0.7.RELEASE.jar" />
+				<pathelement path="lib/spring-core-3.0.7.RELEASE.jar" />
+				<pathelement path="lib/spring-test-3.0.7.RELEASE.jar" />
+			</classpath>
+		</javac>
+	</target>
+
+	<target name="buildJar" depends="compileCloudKon">
+		<mkdir dir="build/jar" />
+		<jar destfile="build/jar/CloudKon.jar" basedir="build/classes">
+			<manifest>
+				<attribute name="Main-Class" value="" />
+			</manifest>
+			<fileset dir="bin/" />
+			<zipfileset excludes="META-INF/*.SF" src="./lib/aspectjrt-1.8.2.jar" />
+			<zipfileset excludes="META-INF/*.SF" src="./lib/aspectjweaver.jar" />
+			<zipfileset excludes="META-INF/*.SF" src="./lib/aws-java-sdk-1.10.73.jar" />
+			<zipfileset excludes="META-INF/*.SF" src="./lib/aws-java-sdk-1.10.73-javadoc.jar" />
+			<zipfileset excludes="META-INF/*.SF" src="./lib/aws-java-sdk-1.10.73-sources.jar" />
+			<zipfileset excludes="META-INF/*.SF" src="./lib/aws-java-sdk-flow-build-tools-1.10.73.jar" />
+			<zipfileset excludes="META-INF/*.SF" src="./lib/commons-codec-1.6.jar" />
+			<zipfileset excludes="META-INF/*.SF" src="./lib/commons-logging-1.1.3.jar" />
+			<zipfileset excludes="META-INF/*.SF" src="./lib/freemarker-2.3.9.jar" />
+			<zipfileset excludes="META-INF/*.SF" src="./lib/httpclient-4.3.6.jar" />
+			<zipfileset excludes="META-INF/*.SF" src="./lib/httpcore-4.3.3.jar" />
+			<zipfileset excludes="META-INF/*.SF" src="./lib/jackson-annotations-2.5.0.jar" />
+			<zipfileset excludes="META-INF/*.SF" src="./lib/jackson-core-2.5.3.jar" />
+			<zipfileset excludes="META-INF/*.SF" src="./lib/jackson-databind-2.5.3.jar" />
+			<zipfileset excludes="META-INF/*.SF" src="./lib/jackson-dataformat-cbor-2.5.3.jar" />
+			<zipfileset excludes="META-INF/*.SF" src="./lib/javax.mail-api-1.4.6.jar" />
+			<zipfileset excludes="META-INF/*.SF" src="./lib/joda-time-2.8.1.jar" />
+			<zipfileset excludes="META-INF/*.SF" src="./lib/spring-beans-3.0.7.RELEASE.jar" />
+			<zipfileset excludes="META-INF/*.SF" src="./lib/spring-context-3.0.7.RELEASE.jar" />
+			<zipfileset excludes="META-INF/*.SF" src="./lib/spring-core-3.0.7.RELEASE.jar" />
+			<zipfileset excludes="META-INF/*.SF" src="./lib/spring-test-3.0.7.RELEASE.jar" />
+		</jar>
+	</target>
+
+	<target name="main" depends="compile, compileCloudKon, buildJar,init ">
+	</target>
+</project>

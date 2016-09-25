@@ -1,0 +1,465 @@
+## Source Code For Shared Memory Tera Sort.
+
+## SharedMemory Sort Java
+## TeraSort.java
+package edu.terasort;
+	
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.util.Properties;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.logging.FileHandler;
+import java.util.logging.Logger;
+import java.util.logging.SimpleFormatter;
+
+public class TeraSort {
+
+	public static Properties property;
+	public static Logger logger = Logger.getLogger(TeraSort.class.getName());
+	private static FileHandler filehandler;
+	
+	public static void main(String[] args) {
+
+		property = new Properties();
+		try {
+			//load an configuration file
+			property.load(new FileInputStream(new File("./resources/config.properties")));
+			//create log file
+			filehandler = new FileHandler("./resources/TeraSort.log");  
+			SimpleFormatter formatter = new SimpleFormatter();  
+			filehandler.setFormatter(formatter);
+	        logger.addHandler(filehandler);
+			// Sort Big file into chunks using multiThreading.
+	        divideInChunks();
+	        
+	        // Merge chunks of file into a single file using multiThreading.
+			mergeFromChunks();
+		} catch (FileNotFoundException e) {
+			logger.info(e.getMessage());
+		} catch (IOException e) {
+			logger.info(e.getMessage());
+		}
+	}
+
+	/**
+	 * This method pass the starting position and ending position of a file to a thread.
+	 * That thread creates a file chunk from that starting to ending position.
+	 */
+	private static void divideInChunks() {
+		logger.info("Chunks creation started.");
+		double startTime = System.currentTimeMillis();
+		int threadPoolThread = Integer.parseInt(property.getProperty("threadPoolThread"));
+		// Create a ThreadPool
+		ExecutorService executor = Executors.newFixedThreadPool(threadPoolThread);
+		double numberOfLines = Integer.parseInt(property.getProperty("noOfLinesInSingleRead"));
+		double noOfThreads = Integer.parseInt(property.getProperty("noOfThreads"));
+		double startPos;
+		double endPos;
+		String filePath = property.getProperty("sourceFile");
+		String destinationFolder = property.getProperty("DestinationFolder");
+		for (int i = 0; i < noOfThreads; i++) {
+			startPos = i * numberOfLines;
+			endPos = ((i + 1) * numberOfLines) - 1;
+			// call a Thread for creation of chunks
+			Runnable createFileThread = new Thread(new CreateFile(filePath, destinationFolder, startPos, endPos));
+			executor.execute(createFileThread);
+		}
+		executor.shutdown();
+		while (!executor.isTerminated()) {
+		}
+		long endTime = System.currentTimeMillis();
+		logger.info("Total time taken divide and sort a file is : " + (endTime - startTime) / 1000 + " Seconds");
+		logger.info("Finished all creation of chunks");
+	}
+
+	/**
+	 * This method merge the two chunks of file into 1 file.
+	 * This process is repeated till there remains single file in output folder 
+	 */
+	private static void mergeFromChunks() {
+		logger.info("Merging started.");
+		double startTime = System.currentTimeMillis();
+		ExecutorService executor;
+		int noOfThreads = 0;
+		String destinationPath = property.getProperty("DestinationFolder");
+		File folder = new File(destinationPath);
+		int threadPoolThread = Integer.parseInt(property.getProperty("threadPoolThread"));
+		while (true) {
+			// Take all files of a folder
+			File[] listOfFiles = folder.listFiles();
+			int noOfFiles = listOfFiles.length;
+			if (noOfFiles == 1) {
+				break;
+			}
+			noOfThreads = noOfFiles / 2;
+			if(noOfFiles <= threadPoolThread){
+				threadPoolThread = noOfThreads;
+			}
+			// create a thread pool
+			executor = Executors.newFixedThreadPool(threadPoolThread);
+			int j = 0;
+			for (int i = 0; i < noOfThreads; i++) {
+				Runnable mergeFileThread = new Thread(
+						new MergeFiles(destinationPath,listOfFiles[j].getName(), listOfFiles[j + 1].getName()));
+				// execute a thread for merging two files
+				executor.execute(mergeFileThread);
+				j += 2;
+			}
+			executor.shutdown();
+			// process is waited till all files are merged.
+			while (!executor.isTerminated()) {
+			}
+		}
+		double endTime = System.currentTimeMillis();
+		logger.info("Total time taken to sort a "+ property.getProperty("sourceFile") + " file is : " + (endTime - startTime) / 1000 + " Seconds");
+	}
+}
+
+## CreateFile.java
+
+package edu.terasort;
+
+import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.RandomAccessFile;
+import java.util.Map;
+import java.util.TreeMap;
+
+/**
+ * @author aditya
+ * This is a runnable class. Run method of this class creates a chunk of files.
+ */
+public class CreateFile implements Runnable {
+
+	private String filePath;
+	private String destinationPath;
+	private double startPos;
+	private double endPos;
+
+	public CreateFile(String filePath, String destinationPath, double startPos, double endPos) {
+		this.filePath = filePath;
+		this.destinationPath = destinationPath;
+		this.startPos = startPos;
+		this.endPos = endPos;
+	}
+
+	@Override
+	public void run() {
+
+		File file = null;
+		RandomAccessFile randomFileAccess = null;
+		InputStream inputStream = null;
+		BufferedReader bufferedReader = null;
+		FileOutputStream fileOutputStream = null;
+		try {
+			file = new File(this.filePath);
+			randomFileAccess = new RandomAccessFile(file, "r");
+			double seekPosition = startPos * 100; 
+			// Pointing to a specified line of an large input file
+			randomFileAccess.seek((long) seekPosition);
+
+			int size = (int) ((endPos - startPos) + 1);
+			byte[] bytesData = new byte[100 * size];
+			randomFileAccess.read(bytesData, 0, bytesData.length);
+			inputStream = new ByteArrayInputStream(bytesData);
+			bufferedReader = new BufferedReader(new InputStreamReader(inputStream));
+
+			String lineData = null;
+			// Storing values in a TreeMap as key value pairs
+			TreeMap<String, String> dataMap = new TreeMap<String, String>();
+			while ((lineData = bufferedReader.readLine()) != null) {
+				dataMap.put(lineData.substring(0, 10), lineData.substring(10));
+			}
+
+			String data;
+			byte[] lineByte = new byte[100];
+			int j = 0;
+			// Appending sorted lines output and converting to an byte array
+			for (Map.Entry<String, String> entry : dataMap.entrySet()) {
+				data = entry.getKey() + "" + entry.getValue();
+				lineByte = data.getBytes();
+				for (int i = 0; i < lineByte.length; i++) {
+					bytesData[j] = lineByte[i];
+					j++;
+				}
+				j += 2;
+			}
+
+			//Writing a byte array to a file.
+			File outputFile = new File(this.destinationPath + "File_" + this.startPos);
+			fileOutputStream = new FileOutputStream(outputFile);
+			fileOutputStream.write(bytesData);
+			
+		} catch (IOException e) {
+			TeraSort.logger.info(e.getMessage());
+		} finally {
+			try {
+				randomFileAccess.close();
+				fileOutputStream.close();
+			} catch (IOException e) {
+				TeraSort.logger.info(e.getMessage());
+			}
+		}
+
+	}
+}
+
+## Merge File .java
+package edu.terasort;
+
+import java.io.File;
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.Scanner;
+
+/**
+ * @author aditya
+ * This is a runnable class. Run method of this class merge a chunks of files.
+ */
+public class MergeFiles implements Runnable {
+
+	private String destinationPath;
+	private String fName1;
+	private String fName2;
+
+	public MergeFiles(String destinationPath, String name1, String name2) {
+		this.destinationPath = destinationPath;
+		this.fName1 = name1;
+		this.fName2 = name2;
+	}
+
+	@Override
+	public void run() {
+		Scanner reader1 = null;
+		Scanner reader2 = null;
+		PrintWriter output = null;
+		try {
+			File file1 = new File(this.destinationPath + fName1);
+			File file2 = new File(this.destinationPath + fName2);
+			File file3 = new File(this.destinationPath + fName1 + "1");
+
+			reader1 = new Scanner(file1);
+			reader2 = new Scanner(file2);
+			output = new PrintWriter(file3);
+
+			String string1 = null;
+			String string2 = null;
+			String s1 = null;
+			String s2 = null;
+			int result;
+
+			string1 = reader1.nextLine();
+			string2 = reader2.nextLine();
+
+			// Reading line and writing to a file in sorted order.
+			while (true) {
+				if (string1 != null && string1 != "" && string2 != null && string2 != "") {
+					s1 = string1.substring(0, 10);
+					s2 = string2.substring(0, 10);
+				} else {
+					break;
+				}
+
+				result = s1.compareTo(s2);
+
+				if (result < 0) {
+					output.write(string1 + "\r\n");
+					string1 = "";
+					if (reader1.hasNext()) {
+						string1 = reader1.nextLine();
+					} else {
+						break;
+					}
+				} else {
+					output.write(string2 + "\r\n");
+					string2 = "";
+					if (reader2.hasNext()) {
+						string2 = reader2.nextLine();
+					} else {
+						break;
+					}
+				}
+
+			}
+			if (string1 != null && string1 != "") {
+				output.write(string1 + "\r\n");
+			}
+			if (string2 != null && string2 != "") {
+				output.write(string2 + "\r\n");
+			}
+			while (reader1 != null) {
+				if (reader1.hasNext()) {
+					output.write(reader1.nextLine() + "\r\n");
+				} else {
+					break;
+				}
+			}
+			while (reader2 != null) {
+				if (reader2.hasNext()) {
+					output.write(reader2.nextLine() + "\r\n");
+				} else {
+					break;
+				}
+			}
+			output.flush();
+
+		} catch (IOException e) {
+			System.out.println("Error in merge()\n" + e.getMessage());
+		}
+
+		finally {
+			if (reader1 != null) {
+				reader1.close();
+			}
+			if (reader2 != null) {
+				reader2.close();
+			}
+			if (output != null) {
+				output.close();
+			}
+			try {
+				Path path = Paths.get(this.destinationPath + fName1);
+				Files.deleteIfExists(path);
+				path = Paths.get(this.destinationPath + fName2);
+				Files.deleteIfExists(path);
+
+			} catch (IOException e) {
+				TeraSort.logger.info(e.getMessage());
+			}
+		}
+	}
+
+}
+
+
+## Source Code for Hadoop Tera Sort.
+
+# TeraSort.java
+
+package edu.sort;
+
+import java.io.IOException;
+import java.util.logging.FileHandler;
+import java.util.logging.Logger;
+import java.util.logging.SimpleFormatter;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.mapreduce.Job;
+import org.apache.hadoop.mapreduce.Mapper;
+import org.apache.hadoop.mapreduce.Reducer;
+import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
+import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
+
+// This is a main class for Hadoop Map Reduce
+public class TeraSort {
+
+	private static Logger logger = Logger.getLogger(TeraSort.class.getName());
+	private static FileHandler filehandler;
+	
+	public TeraSort() {
+		super();
+	}
+
+	public static void main(String[] args) throws Exception {
+		
+		filehandler = new FileHandler("./MapReduceTeraSort.log");  
+		SimpleFormatter formatter = new SimpleFormatter();  
+		filehandler.setFormatter(formatter);
+        logger.addHandler(filehandler);
+		
+        long startTime = System.currentTimeMillis();
+		Configuration conf = new Configuration();
+		Job job = new Job(conf, "Tera Sort");
+		job.setJarByClass(TeraSort.class);
+		job.setMapperClass(TokenizerMapper.class);
+		job.setCombinerClass(IntSumReducer.class);
+		job.setReducerClass(IntSumReducer.class);
+		job.setOutputKeyClass(Text.class);
+		job.setOutputValueClass(Text.class);
+		FileInputFormat.addInputPath(job, new Path(args[0]));
+		FileOutputFormat.setOutputPath(job, new Path(args[1]));
+		long endTime = System.currentTimeMillis();
+		logger.info("Total Time for Execution of MapReduce is :" + (endTime-startTime)/1000 + " Seconds");
+		System.exit(job.waitForCompletion(true) ? 0 : 1);
+	}
+}
+
+// This is a Mapper Classer, it takes input as key value pair and emits output as text key value pair 
+class TokenizerMapper extends Mapper<Object, Text, Text, Text> {
+
+	private Text word = new Text();
+	private Text word1 = new Text();
+
+	public void map(Object key, Text value, Context context) throws IOException, InterruptedException {
+
+		String line = value.toString();
+		String key1 = line.substring(0, 10);
+		String val = line.substring(10);
+		word.set(key1);
+		word1.set(val);
+		context.write(word, word1);
+
+	}
+}
+
+// This is a Reducer class, it takes input as text key value pair and emits output as text key value pair 
+class IntSumReducer extends Reducer<Text, Text, Text, Text> {
+
+	private Text word = new Text();
+	private Text word1 = new Text();
+
+	public void reduce(Text key, Text value, Context context) throws IOException, InterruptedException {
+		word.set(key.toString() + value.toString());
+		word1.set("");
+		context.write(word, word1);
+	}
+}
+
+## Source Code for Spark TeraSort.
+
+import java.io.{File, BufferedWriter, FileWriter}
+
+import org.apache.spark.SparkContext
+import org.apache.spark.SparkContext._
+import org.apache.spark.SparkConf
+
+import scala.collection.immutable.ListMap
+
+// Its a main class for Sorting File 
+object FileSort {
+
+  def main(args: Array[String]) {
+    
+    val startTime = System.currentTimeMillis()
+    val inputFile = "hdfs:/hdfs_aditya/100GBFile" // Should be some file on your system
+    val outputFile = new File("/aditya/ouput")
+    val bufferedWriter = new BufferedWriter(new FileWriter(outputFile))
+    val data = sc.textFile(inputFile)
+    val splitData = data.flatMap(line => line.split("\n"))
+
+    val arrayFromCollectedData = splitData.flatMap(line => Map(line.substring(0,10) -> line.substring(10,line.length)))
+    val mapFromArray = arrayFromCollectedData.map(line => line._1 -> line._2)
+    val sortedData = mapFromArray.sortBy(_._1)
+    val collectedData = sortedData.collect()
+    collectedData.foreach(line => bufferedWriter.write(line._1 + line._2 + "\r\n"))
+    val endTime = System.currentTimeMillis()
+    println ("Time Taken for Completion of Sorting is :" + (endTime - startTime) + "MilliSeconds")
+  }
+}
+
+
+
+

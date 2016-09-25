@@ -1,0 +1,809 @@
+
+## For Local Execution code.
+
+Client.java
+
+package edu.client;
+
+import java.io.File;
+
+import edu.executor.SchedulerImpl;
+
+public class Client implements Runnable {
+
+	private SchedulerImpl schedulerImpl = null;
+	private String workloadFilePath = null;
+
+	public Client(SchedulerImpl schedulerImpl, String workloadFilePath) {
+		this.schedulerImpl = schedulerImpl;
+		this.workloadFilePath = workloadFilePath;
+	}
+
+	/* (non-Javadoc)
+	 * @see java.lang.Runnable#run()
+	 * Its submit task to a request queue
+	 */
+	@Override
+	public void run() {
+		File file = new File(workloadFilePath);
+		schedulerImpl.addTaskToQueue(file);
+	}
+}
+
+
+Worker.java
+
+package edu.worker;
+
+import edu.executor.SchedulerImpl;
+import edu.task.Task;
+
+public class Worker implements Runnable {
+
+	SchedulerImpl schedulerImpl = null;
+
+	public Worker(SchedulerImpl schedulerImpl) {
+
+		this.schedulerImpl = schedulerImpl;
+	}
+
+	@Override
+	public void run() {
+		// it continuously check for the request queue unless the queue is empty
+		while (true) {
+			if (null != schedulerImpl.getTaskQueue() && (!schedulerImpl.getTaskQueue().isEmpty())) {
+				// removing element from a request queue
+				Task task = schedulerImpl.getTaskQueue().remove();
+				if (null != task && !schedulerImpl.getTaskMapper().contains(task.getTaskId())) {
+					schedulerImpl.getTaskMapper().put(task.getTaskId(), true);
+					try {
+						Thread.sleep(Integer.parseInt(task.getExecutionTime()));
+						task.setExecuted(true);
+						int taskCount = schedulerImpl.getTaskCount();
+						schedulerImpl.setTaskCount(--taskCount);
+						// adding task to a response queue
+						schedulerImpl.getResponseQueue().add(task);
+					} catch (NumberFormatException | InterruptedException e) {
+						e.printStackTrace();
+					}
+				}
+			} else {
+				break;
+			}
+		}
+
+	}
+
+}
+
+
+TaskCreation.java
+
+package edu.utility;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.util.Properties;
+
+/**
+ * @author Aditya
+ *This is a utility class which is used to generate a workload file.
+ */
+public class TaskCreation {
+
+	public static void main(String[] args) {
+		File file = null;
+		FileWriter fileWriter = null;
+		try {
+			Properties property = new Properties();
+			property.load(new FileInputStream(new File("./resources/config.properties")));
+			file = new File("./resources/workloadFile");
+			fileWriter = new FileWriter(file);
+			int noOfTasks = Integer.parseInt(property.getProperty("noOfTasks"));
+			int sleepTime = Integer.parseInt(property.getProperty("sleepTime"));
+
+			for (int i = 1; i <= noOfTasks; i++) {
+				fileWriter.write("sleep_task" + i + " " + sleepTime + "\n");
+			}
+
+		} catch (FileNotFoundException e) {
+			e.printStackTrace();
+		} catch (IOException e) {
+			e.printStackTrace();
+		} finally {
+			try {
+				fileWriter.close();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		}
+	}
+}
+
+
+Task.java
+
+package edu.task;
+
+public class Task {
+
+	private String taskId;
+	private String executionTime;
+	private boolean isExecuted;
+
+	public boolean isExecuted() {
+		return isExecuted;
+	}
+
+	public void setExecuted(boolean isExecuted) {
+		this.isExecuted = isExecuted;
+	}
+
+	public String getTaskId() {
+		return taskId;
+	}
+
+	public void setTaskId(String taskId) {
+		this.taskId = taskId;
+	}
+
+	public String getExecutionTime() {
+		return executionTime;
+	}
+
+	public void setExecutionTime(String executionTime) {
+		this.executionTime = executionTime;
+	}
+
+}
+
+
+Scheduler.java
+
+package edu.executor;
+
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
+
+import edu.task.Task;
+
+public class SchedulerImpl {
+
+	private Queue<Task> taskQueue = null;
+	private Queue<Task> responseQueue = null;
+	private ConcurrentHashMap<String, Boolean> taskMapper = null;
+	private int taskCount = 0;
+	private int totalTaskAdded = 0;
+	private static SchedulerImpl schedulerImpl = null;
+
+	private SchedulerImpl() {
+
+	}
+
+	/**
+	 * This Method initialize all queue and Map
+	 */
+	public void initialize() {
+		taskQueue = new ConcurrentLinkedQueue<Task>();
+		responseQueue = new ConcurrentLinkedQueue<Task>();
+		taskMapper = new ConcurrentHashMap<String, Boolean>();
+	}
+
+	
+	public int getTaskCount() {
+		return taskCount;
+	}
+
+	public void setTaskCount(int taskCount) {
+		this.taskCount = taskCount;
+	}
+
+	public Queue<Task> getTaskQueue() {
+		return taskQueue;
+	}
+
+	public Queue<Task> getResponseQueue() {
+		return responseQueue;
+	}
+
+	public ConcurrentHashMap<String, Boolean> getTaskMapper() {
+		return taskMapper;
+	}
+
+	/**
+	 * @param file
+	 * This method reads the file and insert it into a request queue
+	 */
+	public void addTaskToQueue(File file) {
+
+		try {
+			FileInputStream fileInputStream = new FileInputStream(file);
+			InputStreamReader inputStreamReader = new InputStreamReader(fileInputStream);
+			BufferedReader bufferedReader = new BufferedReader(inputStreamReader);
+			String line = bufferedReader.readLine();
+			while (null != line && !line.isEmpty()) {
+				String[] taskDetails = line.split(" ");
+				Task task = new Task();
+				task.setTaskId(taskDetails[0]);
+				task.setExecutionTime(taskDetails[1]);
+				task.setExecuted(false);
+				taskCount++;
+				totalTaskAdded++;
+				getTaskQueue().add(task);
+				line = bufferedReader.readLine();
+			}
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		System.out.println("Total task added by Client = " + totalTaskAdded);
+	}
+	
+	public static SchedulerImpl getSchedulerImplInstance() {
+		if (null == schedulerImpl) {
+			schedulerImpl = new SchedulerImpl();
+		}
+		return schedulerImpl;
+	}
+
+}
+
+
+ExecuteTask.java
+
+package edu.executor;
+
+import edu.client.Client;
+import edu.worker.Worker;
+
+public class ExecuteTask {
+
+	public static void main(String[] args) {
+		SchedulerImpl schedulerImpl = SchedulerImpl.getSchedulerImplInstance();
+		schedulerImpl.initialize();
+
+		int noOfWorkerThread = Integer.parseInt(args[3]);
+		String workloadFilePath = args[5];
+
+		// Run client
+		Thread clientThread = new Thread(new Client(schedulerImpl, workloadFilePath));
+		System.out.println("Started Adding Jobs...");
+		clientThread.start();
+
+		try {
+			Thread.sleep(100);
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
+
+		long startTime = System.currentTimeMillis();
+		// Run Worker
+		for (int i = 0; i < noOfWorkerThread; i++) {
+			Thread workerThread = new Thread(new Worker(schedulerImpl));
+			workerThread.start();
+		}
+		System.out.println("Workers Started...");
+
+		// Checking for all task execution
+		while (true) {
+			int count = schedulerImpl.getTaskCount();
+			System.out.print("");
+			if (count != 0) {
+				continue;
+			} else {
+				break;
+			}
+		}
+		long endTime = System.currentTimeMillis();
+		System.out.println(
+				"****** Total time for executing all task = " + (endTime - (startTime)) + " milliseconds******");
+	}
+
+}
+
+
+## For Remote Execution code.
+
+Client.Java
+
+package edu.client;
+
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
+import com.amazonaws.services.sqs.model.Message;
+
+import edu.dynamodb.DynamoDbImpl;
+import edu.sqs.SQSImplementation;
+
+public class Client {
+
+	private static int totalTaskAdded;
+
+	public static void main(String[] args) {
+
+		SQSImplementation sqsImplementation = new SQSImplementation();
+		DynamoDbImpl dynamoDbImpl = new DynamoDbImpl();
+
+		String taskQueue = args[1];
+		String responseQueueName = args[2];
+		String tableName = "MyTable";
+
+		long startTime = System.currentTimeMillis();
+		String workLoadFile = args[4];
+		File file = new File(workLoadFile);
+		// add task to a request queue.
+		addTaskToQueue(file, sqsImplementation, taskQueue);
+
+		// continuously polls for the responses
+		int count = 0;
+		Set<String> taskSet = new HashSet<String>();
+		while (true) {
+			List<Message> messages = sqsImplementation.retrrieveElementFromQueue(responseQueueName);
+			if (null != messages && messages.size() > 0) {
+				for (Message message : messages) {
+					String parts[] = message.getBody().split(" ");
+					if (!taskSet.contains(parts[0])) {
+						taskSet.add(parts[0]);
+						count++;
+					}
+				}
+			}
+			if (totalTaskAdded == count) {
+				break;
+			}
+		}
+		long endTime = System.currentTimeMillis();
+		System.out.println("Total time for executing tasks: " + (endTime - startTime));
+
+		// deleting all created queues and table
+		sqsImplementation.deleteQueue("MyQueue");
+		sqsImplementation.deleteQueue("responseQueue");
+		dynamoDbImpl.deleteTable(tableName);
+	}
+
+	/**
+	 * @param file
+	 * @param sqsImplementation
+	 * @param taskQueue
+	 *            This function adds a task to a request queue
+	 */
+	public static void addTaskToQueue(File file, SQSImplementation sqsImplementation, String taskQueue) {
+		try {
+			FileInputStream fileInputStream = new FileInputStream(file);
+			InputStreamReader inputStreamReader = new InputStreamReader(fileInputStream);
+			BufferedReader bufferedReader = new BufferedReader(inputStreamReader);
+			String line = bufferedReader.readLine();
+			while (null != line && !line.isEmpty()) {
+				totalTaskAdded++;
+				sqsImplementation.insertElementInQueue(taskQueue, line);
+				line = bufferedReader.readLine();
+			}
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+
+		System.out.println("Total task added by Client = " + totalTaskAdded);
+	}
+}
+
+
+Worker.java
+
+package edu.worker;
+
+import edu.dynamodb.DynamoDbImpl;
+import edu.sqs.SQSImplementation;
+
+public class Worker {
+
+	public static void main(String[] args) {
+
+		SQSImplementation sqsImplementation = new SQSImplementation();
+		String taskQueue = args[1];
+		String responseQueue = args[2];
+		String tableName = "MyTable";
+
+		// Create table
+		DynamoDbImpl dynamoDbImpl = new DynamoDbImpl();
+		dynamoDbImpl.createTable(tableName);
+		
+		// create queues
+		sqsImplementation.createQueue(taskQueue);
+		sqsImplementation.createQueue(responseQueue);
+		
+		// Multi threaded worker
+		int noOfThreads = Integer.parseInt(args[4]);
+		for (int i = 0; i < noOfThreads; i++) {
+			Thread thread = new Thread(new WorkerImpl(sqsImplementation, taskQueue, responseQueue, dynamoDbImpl, tableName));
+			thread.start();
+		}
+		
+		
+	}
+}
+
+
+workerImpl.java
+
+package edu.worker;
+
+import java.util.List;
+
+import com.amazonaws.services.sqs.model.DeleteMessageRequest;
+import com.amazonaws.services.sqs.model.Message;
+
+import edu.dynamodb.DynamoDbImpl;
+import edu.sqs.SQSImplementation;
+
+public class WorkerImpl implements Runnable {
+
+	private SQSImplementation sqsImplementation = null;
+	private String taskQueue = null;
+	private String responseQueue = null;
+	private DynamoDbImpl dbImpl = null;
+	private String tableName = null;
+
+	public WorkerImpl(SQSImplementation sqsImplementation, String queueName, String responseQueue, DynamoDbImpl dbImpl, String tableName) {
+		this.sqsImplementation = sqsImplementation;
+		this.taskQueue = queueName;
+		this.responseQueue = responseQueue;
+		this.dbImpl = dbImpl;
+		this.tableName = tableName;
+	}
+
+	@Override
+	public void run() {
+		while (true) {
+			// take element from request queue
+			List<Message> messages = this.sqsImplementation.retrrieveElementFromQueue(this.taskQueue);
+			if (null != messages && messages.size() > 0) {
+				for (Message message : messages) {
+					String[] messageParts = message.getBody().split(" ");
+					// check for entry in a dynamoDB table
+					boolean isEntryExist = this.dbImpl.checkIfEntryExist(this.tableName, messageParts[0]);
+					if (!isEntryExist) {
+						// insert task in a dynamoDB table
+						this.dbImpl.insertElementInTable(tableName, messageParts[0]);
+						try {
+							Thread.sleep(Integer.parseInt(messageParts[1]));
+						} catch (NumberFormatException e) {
+							e.printStackTrace();
+						} catch (InterruptedException e) {
+							e.printStackTrace();
+						}
+
+						// insert element in response queue
+						this.sqsImplementation.insertElementInQueue(responseQueue, messageParts[0] + " 0");
+						// Delete a message from a request queue
+						String messageReceiptHandle = message.getReceiptHandle();
+						this.sqsImplementation.getSqs().deleteMessage(new DeleteMessageRequest(
+								sqsImplementation.getQueueURL(this.taskQueue), messageReceiptHandle));
+					}else{
+						System.out.println("Duplicate Entry Found" + messageParts[0]);
+					}
+				}
+
+			} 
+		}
+	}
+
+}
+
+
+TaskCreation.java
+
+package edu.utility;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.util.Properties;
+
+public class TaskCreation {
+
+	public static void main(String[] args) {
+		File file = null;
+		FileWriter fileWriter = null;
+		try {
+			Properties property = new Properties();
+			property.load(new FileInputStream(new File("./resources/config.properties")));
+			file = new File("./resources/workloadFile");
+			fileWriter = new FileWriter(file);
+			//int noOfTasks = Integer.parseInt(property.getProperty("noOfTasks"));
+			//int sleepTime = Integer.parseInt(property.getProperty("sleepTime"));
+			int noOfTasks = Integer.parseInt(args[0]);
+			int sleepTime = Integer.parseInt(args[1]);
+
+			for (int i = 1; i <= noOfTasks; i++) {
+				fileWriter.write("sleep_task" + i + " " + sleepTime + "\n");
+			}
+
+		} catch (FileNotFoundException e) {
+			e.printStackTrace();
+		} catch (IOException e) {
+			e.printStackTrace();
+		} finally {
+			try {
+				fileWriter.close();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		}
+	}
+}
+
+
+SQSImplementation.java
+
+package edu.sqs;
+
+import java.util.List;
+
+import com.amazonaws.AmazonClientException;
+import com.amazonaws.auth.AWSCredentials;
+import com.amazonaws.auth.profile.ProfileCredentialsProvider;
+import com.amazonaws.auth.profile.ProfilesConfigFile;
+import com.amazonaws.regions.Region;
+import com.amazonaws.regions.Regions;
+import com.amazonaws.services.sqs.AmazonSQS;
+import com.amazonaws.services.sqs.AmazonSQSClient;
+import com.amazonaws.services.sqs.model.CreateQueueRequest;
+import com.amazonaws.services.sqs.model.DeleteQueueRequest;
+import com.amazonaws.services.sqs.model.GetQueueUrlRequest;
+import com.amazonaws.services.sqs.model.GetQueueUrlResult;
+import com.amazonaws.services.sqs.model.Message;
+import com.amazonaws.services.sqs.model.ReceiveMessageRequest;
+import com.amazonaws.services.sqs.model.SendMessageRequest;
+
+public class SQSImplementation {
+
+	private AmazonSQS sqs = null;
+
+	public SQSImplementation() {
+		AWSCredentials credentials = null;
+		ProfilesConfigFile configFile = new ProfilesConfigFile("./resources/credentials");
+		try {
+			credentials = new ProfileCredentialsProvider(configFile, "default").getCredentials();
+			this.sqs = new AmazonSQSClient(credentials);
+			Region usWest2 = Region.getRegion(Regions.US_WEST_2);
+			this.sqs.setRegion(usWest2);
+		} catch (Exception e) {
+			throw new AmazonClientException("Cannot load the credentials from the credential profiles file. "
+					+ "Please make sure that your credentials file is at the correct "
+					+ "location (/home/aditya/.aws/credentials), and is in valid format.", e);
+		}
+	}
+
+	/**
+	 * @param queueName
+	 * 
+	 *            It deletes that particular queue.
+	 */
+	public void deleteQueue(String queueName) {
+		String queueURL = getQueueURL(queueName);
+		this.sqs.deleteQueue(new DeleteQueueRequest(queueURL));
+	}
+
+	/**
+	 * @param queueName
+	 *            It fetches an entry from a Queue and retruns the message list.
+	 */
+	public List<Message> retrrieveElementFromQueue(String queueName) {
+		String queueURL = getQueueURL(queueName);
+		ReceiveMessageRequest receiveMessageRequest = new ReceiveMessageRequest(queueURL);
+		List<Message> messages = sqs.receiveMessage(receiveMessageRequest).getMessages();
+
+		return messages;
+	}
+
+	/**
+	 * @param queueName
+	 * @param message
+	 *            This method insert an entry in a Queue
+	 */
+	public void insertElementInQueue(String queueName, String message) {
+		String queueURL = getQueueURL(queueName);
+		this.sqs.sendMessage(new SendMessageRequest(queueURL, message));
+	}
+
+	/**
+	 * @param queueName
+	 *            This method cretaes a queue with specified name.
+	 */
+	public void createQueue(String queueName) {
+		String queueURL = null;
+		try {
+			queueURL = getQueueURL(queueName);
+		} catch (Exception e) {
+			System.out.println();
+		}
+		if (null == queueURL) {
+			CreateQueueRequest createQueueRequest = new CreateQueueRequest(queueName);
+			sqs.createQueue(createQueueRequest);
+		}
+	}
+
+	/**
+	 * @param queueName
+	 * @return URL of a queue having name = queueName
+	 */
+	public String getQueueURL(String queueName) {
+		GetQueueUrlRequest request = new GetQueueUrlRequest(queueName);
+		GetQueueUrlResult queueResult = this.sqs.getQueueUrl(request);
+		return queueResult.getQueueUrl();
+	}
+
+	public AmazonSQS getSqs() {
+		return sqs;
+	}
+}
+
+
+DynamoDBImpl.java
+
+package edu.dynamodb;
+
+import java.util.HashMap;
+import java.util.Map;
+
+import com.amazonaws.AmazonClientException;
+import com.amazonaws.AmazonServiceException;
+import com.amazonaws.auth.AWSCredentials;
+import com.amazonaws.auth.profile.ProfileCredentialsProvider;
+import com.amazonaws.auth.profile.ProfilesConfigFile;
+import com.amazonaws.regions.Region;
+import com.amazonaws.regions.Regions;
+import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient;
+import com.amazonaws.services.dynamodbv2.model.AttributeDefinition;
+import com.amazonaws.services.dynamodbv2.model.AttributeValue;
+import com.amazonaws.services.dynamodbv2.model.ComparisonOperator;
+import com.amazonaws.services.dynamodbv2.model.Condition;
+import com.amazonaws.services.dynamodbv2.model.CreateTableRequest;
+import com.amazonaws.services.dynamodbv2.model.KeySchemaElement;
+import com.amazonaws.services.dynamodbv2.model.KeyType;
+import com.amazonaws.services.dynamodbv2.model.ProvisionedThroughput;
+import com.amazonaws.services.dynamodbv2.model.PutItemRequest;
+import com.amazonaws.services.dynamodbv2.model.PutItemResult;
+import com.amazonaws.services.dynamodbv2.model.ScalarAttributeType;
+import com.amazonaws.services.dynamodbv2.model.ScanRequest;
+import com.amazonaws.services.dynamodbv2.model.ScanResult;
+import com.amazonaws.services.dynamodbv2.model.TableDescription;
+import com.amazonaws.services.dynamodbv2.util.Tables;
+
+public class DynamoDbImpl {
+
+	private AmazonDynamoDBClient dynamoDB = null;
+
+	public DynamoDbImpl() {
+		AWSCredentials credentials = null;
+		ProfilesConfigFile configFile = new ProfilesConfigFile("./resources/credentials");
+		try {
+			credentials = new ProfileCredentialsProvider(configFile, "default").getCredentials();
+			this.dynamoDB = new AmazonDynamoDBClient(credentials);
+			Region usWest2 = Region.getRegion(Regions.US_WEST_2);
+			this.dynamoDB.setRegion(usWest2);
+		} catch (Exception e) {
+			throw new AmazonClientException("Cannot load the credentials from the credential profiles file. "
+					+ "Please make sure that your credentials file is at the correct "
+					+ "location (/home/aditya/.aws/credentials), and is in valid format.", e);
+		}
+	}
+
+	/**
+	 * @param tableName
+	 *            it creates a table in a dynamoDB with given tableName. If
+	 *            table already exist it just return without doing anything.
+	 */
+	public void createTable(String tableName) {
+		try {
+
+			// Create table if it does not exist yet
+			if (Tables.doesTableExist(dynamoDB, tableName)) {
+				System.out.println("Table " + tableName + " is already ACTIVE");
+			} else {
+				// Create a table with a primary hash key named 'name', which
+				// holds a string
+				CreateTableRequest createTableRequest = new CreateTableRequest().withTableName(tableName)
+						.withKeySchema(new KeySchemaElement().withAttributeName("TaskId").withKeyType(KeyType.HASH))
+						.withAttributeDefinitions(new AttributeDefinition().withAttributeName("TaskId")
+								.withAttributeType(ScalarAttributeType.S))
+						.withProvisionedThroughput(
+								new ProvisionedThroughput().withReadCapacityUnits(1L).withWriteCapacityUnits(1L));
+				TableDescription createdTableDescription = dynamoDB.createTable(createTableRequest)
+						.getTableDescription();
+				System.out.println("Created Table: " + createdTableDescription);
+
+				// Wait for it to become active
+				System.out.println("Waiting for " + tableName + " to become ACTIVE...");
+				Tables.awaitTableToBecomeActive(dynamoDB, tableName);
+			}
+
+		} catch (AmazonServiceException ase) {
+			System.out.println("Caught an AmazonServiceException, which means your request made it "
+					+ "to AWS, but was rejected with an error response for some reason.");
+			System.out.println("Error Message:    " + ase.getMessage());
+			System.out.println("HTTP Status Code: " + ase.getStatusCode());
+			System.out.println("AWS Error Code:   " + ase.getErrorCode());
+			System.out.println("Error Type:       " + ase.getErrorType());
+			System.out.println("Request ID:       " + ase.getRequestId());
+		} catch (AmazonClientException ace) {
+			System.out.println("Caught an AmazonClientException, which means the client encountered "
+					+ "a serious internal problem while trying to communicate with AWS, "
+					+ "such as not being able to access the network.");
+			System.out.println("Error Message: " + ace.getMessage());
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
+	}
+
+	/**
+	 * @param tableName
+	 * @param taskId
+	 *            It insert that taskId into a given table
+	 */
+	public void insertElementInTable(String tableName, String taskId) {
+		// Add an item
+		Map<String, AttributeValue> item = newItem(taskId);
+		PutItemRequest putItemRequest = new PutItemRequest(tableName, item);
+		PutItemResult putItemResult = dynamoDB.putItem(putItemRequest);
+	}
+
+	private static Map<String, AttributeValue> newItem(String taskId) {
+		Map<String, AttributeValue> item = new HashMap<String, AttributeValue>();
+		item.put("TaskId", new AttributeValue(taskId));
+		item.put("isTaskExecuted", new AttributeValue("0"));
+		return item;
+	}
+
+	/**
+	 * @param tableName
+	 * @param taskId
+	 *            Checks whether table with tableName contains an entry for that
+	 *            particular taskId.
+	 * @returns true if found the entry otherwise returns false.
+	 */
+	public boolean checkIfEntryExist(String tableName, String taskId) {
+		// Scan items for movies with a year attribute greater than 1985
+		HashMap<String, Condition> scanFilter = new HashMap<String, Condition>();
+		Condition condition = new Condition().withComparisonOperator(ComparisonOperator.EQ.toString())
+				.withAttributeValueList(new AttributeValue().withS(taskId));
+		scanFilter.put("TaskId", condition);
+		ScanRequest scanRequest = new ScanRequest(tableName).withScanFilter(scanFilter);
+		ScanResult scanResult = dynamoDB.scan(scanRequest);
+		System.out.println("Result: " + scanResult);
+		if (scanResult.getCount() > 0) {
+			return true;
+		} else {
+			return false;
+		}
+	}
+
+	/**
+	 * @param tableName
+	 *            Delete a given table name
+	 */
+	public void deleteTable(String tableName) {
+		this.dynamoDB.deleteTable(tableName);
+	}
+}
+
+
+
+

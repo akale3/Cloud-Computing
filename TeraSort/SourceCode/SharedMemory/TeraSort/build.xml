@@ -1,0 +1,50 @@
+<project name="SharedMemorySort" default="main" basedir=".">
+	<property name="projectName" value="SharedMemorySort" />
+	<property name="src.dir" location="src" />
+	<property name="build.dir" location="bin" />
+	<property name="dist.dir" location="dist" />
+	<property name="destination.dir" location="destination" />
+
+	<target name="init" >
+		<tstamp />
+		<delete dir="${build.dir}" />
+		<mkdir dir="${build.dir}" />
+		<delete dir="${destination.dir}" />
+		<mkdir dir="${destination.dir}" />
+	</target>
+	
+
+	<target name="compile" depends="init" description="compile the source ">
+		<javac includeantruntime="false" srcdir="${src.dir}" destdir="${build.dir}" />
+	</target>
+
+	<target name="dist" depends="compile" description="package, output to JAR">
+		<mkdir dir="${dist.dir}" />
+		<jar jarfile="${dist.dir}/${projectName}.jar" basedir="${build.dir}">
+			<manifest>
+				<attribute name="Main-Class" value="" />
+			</manifest>
+		</jar>
+	</target>
+
+	<target name="compileTeraSort" depends="init">
+		<mkdir dir="build/classes" />
+		<javac srcdir="src" destdir="build/classes">
+		</javac>
+	</target>
+
+	<target name="RunSortjar" depends="compileTeraSort">
+		<mkdir dir="build/jar" />
+		<jar destfile="build/jar/SharedMemorySort.jar" basedir="build/classes">
+			<manifest>
+				<attribute name="Main-Class" value="edu.terasort.TeraSort" />
+			</manifest>
+		</jar>
+	</target>
+
+	<target name="RunSorting" depends="RunSortjar">
+		<java jar="build/jar/SharedMemorySort.jar" fork="true" />
+	</target>
+
+	<target name="main" depends="RunSorting" />
+</project>

@@ -1,0 +1,90 @@
+
+This Readme.txt gives explanation of which file contains what. And command to execute different scenarios.
+
+I. SharedMemory Sort.
+
+Files and their explanation.
+1. buil/jar/MapReduceTeraSort.jar --> compiled jar for program execution
+2. resources/config.properties --> configuration file to change number of threads 
+3. resources/TeraSort.log --> It shows the time taken by a program to sort a file.
+4. build.xml --> it has all the configuration for building a jar file.
+5. src/TeraSort.java --> its a main class of a Program.
+
+To Run a Shared Memory Sorting.
+
+1. Copy the SharedMemorySort folder to your home location.
+   This folder has all required files of a project to execute a shared memory program.
+
+2. Connect to an EC2 instance and send this above folder structure to that location using scp command.
+   scp -i "PEM_File_NAme".pem -r "source_folder_path" ubuntu@"EC2_Instance_DNS":./
+
+3. run a shell script SharedMemoryScript.sh for setting up environment on EC2.
+
+4. Generate a file using gensort of desired memory (10GB, 100Gb)
+   cd /aditya/SharedMemorySort/gensort-linux-1.5/64/
+   ./gensort -a 100000000 10GBFile
+
+5. Edit configuration settings in resouces/config.properties file.
+   Change number of threads in a thread pool. 
+   Manage total number of threads and number of lines in a chunk so that it equals to number of lines in a file.
+   Specify the input file location.
+   Specify destination folder location. 
+
+6. Remove build folder if already existed.
+   rm -r build
+
+7. Run ant command to build a jar and run a program.
+   ant
+
+8. You can also run a jar using following command
+   java -cp /build/jar/SharedMemoryTeraSort.jar edu.sort.TeraSot   
+
+9. Your program will execute and a sorted file will be generated in your specified directory.
+   TeraSort.log file will be generated in resources folder.
+
+10. To validate a sorted file.
+   cd /aditya/SharedMemorySort/gensort-linux-1.5/64/
+   ./valsort 10GBFile
+
+
+II. Hadoop MapReduce Sort.
+
+Files and their explanation.
+1. buil/jar/MapReduceTeraSort.jar --> compiled jar for program execution
+3. MapReduceTeraSort.log --> It shows the time taken by a program to sort a file.
+4. build.xml --> it has all the configuration for building a jar file.
+5. src/TeraSort.java --> its a main class of a Program.
+
+To Run a Hadoop Map Reduce sort.
+
+1. Create a jar by compiling a hadoop program. Goto MapReduceSort folder.
+
+2. Type ant command to compile a classes and create a jar.
+   ant
+
+3. Now Copy the MapReduceSort folder to your home location.
+   This folder has all required files to execute a Map Reduce program on Amazon EC2 instance.
+
+4. To run a Mapreduce task on your local machine.
+   Generate a file using gensort. Follow same steps as described above
+   Run following command to execute MapReduce Task.
+   java -cp /build/jar/MapReduceTeraSort.jar edu.sort.TeraSot "source_file_path" "destination_file_path"  
+
+5. To run a Mapreduce jar on Amazon Insatnces.
+   Connect to an EC2 instance and send this above folder structure to that location using scp command.
+   scp -i "PEM_File_NAme".pem -r "source_folder_path" ubuntu@"EC2_Instance_DNS":./
+
+6. Follow the exact steps given in HadoopInstallationScript.sh to run a Hadoop Program on amazon EC2 instances.
+   for 1 node and multi nodes.
+
+
+III. Spark Sort.
+
+Files and their explanation.
+1. FileSort.scala --> This is a main class for sorting a file.
+
+To Run a  sorting program on Spark.
+
+1. Follow the exact steps given in sparkInstallationScript.sh to run a Spark Program on amazon EC2 insatnces.
+
+

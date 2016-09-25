@@ -1,0 +1,17 @@
+## Prerequisites
+## Install openSSH on your Remote systems
+
+sudo apt-get install openssh-server
+
+## Install cluster SSH
+
+sudo apt-get install clusterssh
+
+sudo nano /etc/clusters
+
+## Update all ip addresses of EC2 instances which you want to add in an cluster in /etc/clusters file and save.
+clusters = testcluster
+testcluster = ubuntu@552.34.231.223 ubuntu@52.34.231.239
+
+## Run below command to start a cluster and connect to all EC2 instances for parallel execution of commands.
+cssh -l ubuntu -o "-i aditya.pem" testcluster

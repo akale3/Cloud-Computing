@@ -1,0 +1,57 @@
+<project name="MapReduceProject" default="main" basedir=".">
+	<property name="projectName" value="MapReduceSort" />
+	<property name="src.dir" location="src" />
+	<property name="build.dir" location="bin" />
+	<property name="dist.dir" location="dist" />
+	<property name="output.dir" location="output" />
+
+	<target name="init" >
+		<tstamp />
+		<mkdir dir="${build.dir}" />
+		<delete dir="${output.dir}" />
+	</target>
+	
+
+	<target name="compile" depends="init" description="compile the source ">
+		<javac includeantruntime="false" srcdir="${src.dir}" destdir="${build.dir}" />
+	</target>
+
+	
+
+	<target name="compileTeraSort" depends="init">
+		<mkdir dir="build/classes" />
+		<javac srcdir="src" destdir="build/classes">
+			<classpath>
+				<pathelement path="lib/mongo-java-driver-3.1.1.jar" />
+				<pathelement path="lib/commons-io-2.4.jar" />
+				<pathelement path="lib/commons-logging-1.2.jar" />
+				<pathelement path="lib/hadoop-core-0.20.2-cdh3u0.jar" />
+				<pathelement path="lib/jackson-core-asl-1.9.0.jar" />
+				<pathelement path="lib/jackson-core-asl-1.9.13.jar" />
+				<pathelement path="lib/jackson-mapper-asl-1.9.13.jar" />
+				<pathelement path="lib/commons-httpclient-3.1.jar" />
+			</classpath>
+		</javac>
+	</target>
+
+	<target name="CreateSortjar" depends="compileTeraSort">
+		<mkdir dir="build/jar" />
+		<jar destfile="build/jar/MapReduceTeraSort.jar" basedir="build/classes">
+			<manifest>
+				<attribute name="Main-Class" value="edu.sort.TeraSort" />
+			</manifest>
+			<fileset dir="./bin" />
+			<zipgroupfileset dir="lib" includes="commons-compress-1.4.1.jar" />
+			<zipgroupfileset dir="lib" includes="commons-io-2.4.jar" />
+			<zipgroupfileset dir="lib" includes="commons-logging-1.2.jar" />
+			<zipgroupfileset dir="lib" includes="hadoop-core-0.20.2-cdh3u0.jar" />
+			<zipgroupfileset dir="lib" includes="jackson-core-asl-1.9.0.jar" />
+			<zipgroupfileset dir="lib" includes="jackson-core-asl-1.9.13.jar" />
+			<zipgroupfileset dir="lib" includes="jackson-mapper-asl-1.9.13.jar" />
+			<zipgroupfileset dir="lib" includes="commons-httpclient-3.1.jar" />
+		</jar>
+	</target>
+
+	
+	<target name="main" depends="compile, compileTeraSort, CreateSortjar " />
+</project>
